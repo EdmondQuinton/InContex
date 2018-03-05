@@ -17,6 +17,9 @@ namespace InContex.Collections.Persisted
     [Serializable]
     public class IPPQueue<T> : IEnumerable<T>, IEnumerable, ICollection, IReadOnlyCollection<T>, IDisposable where T : struct
     {
+        /// <summary>
+        /// Tail Segment
+        /// </summary>
         private IPPBoundedQueue<int> _segementList;
 
         private IPPBoundedQueue<T> _headSegment;
