@@ -12,7 +12,7 @@ namespace InContex.Runtime.Interop
     /// <summary>
     /// Class exposes native memory management functions to allow high performance memory accesses. 
     /// </summary>
-    internal class NativeMem
+    internal class NativeMethods
     {
         [DllImport("msvcrt.dll", EntryPoint = "memset", CallingConvention = CallingConvention.Cdecl, SetLastError = false)]
         internal static extern IntPtr MemSet(IntPtr dest, int c, int byteCount);

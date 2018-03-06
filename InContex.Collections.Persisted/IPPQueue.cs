@@ -11,23 +11,31 @@ using InContex.Runtime.Serialization;
 namespace InContex.Collections.Persisted
 {
     /// <summary>
-    /// Inter Process Persited Queue.
+    /// Inter process persisted queue. Represents a first-in, first-out collection of objects.
     /// </summary>
-    /// <typeparam name="T"></typeparam>
-    [Serializable]
-    public class IPPQueue<T> : IEnumerable<T>, IEnumerable, ICollection, IReadOnlyCollection<T>, IDisposable where T : struct
+    /// <typeparam name="T">Specifies the type of elements in the queue.</typeparam>
+    public sealed class IPPQueue<T> : IEnumerable<T>, IEnumerable, ICollection, IReadOnlyCollection<T>, IDisposable where T : struct
     {
         /// <summary>
-        /// Tail Segment
+        /// 
         /// </summary>
         private IPPBoundedQueue<int> _segementList;
-
+        /// <summary>
+        /// Bounded queue segment that contains the head element.
+        /// </summary>
         private IPPBoundedQueue<T> _headSegment;
-
+        /// <summary>
+        /// Bounded queue segment that contains the tail element.
+        /// </summary>
         private IPPBoundedQueue<T> _tailSegment;
-
+        /// <summary>
+        /// Bounded queue used to cache a queue segment that is not part of head or tail. This cache is use to 
+        /// for operation that needs to access random queue entries not part of head or tail segments.
+        /// </summary>
         private IPPBoundedQueue<T> _cachedSegment;
-
+        /// <summary>
+        /// User defined object serializer that implements the ISerializer<T> interface.
+        /// </summary>
         private ISerializer<T> _serializer;
 
 
@@ -40,69 +48,98 @@ namespace InContex.Collections.Persisted
         /// The path where queue will be persited.
         /// </summary>
         private string _path;
-
+        /// <summary>
+        /// The number of queue entries that can be stored per segment.
+        /// </summary>
         private int _segmentSize = 16384;
 
         private const int ControlBlockIndexVersion = 3;
         private const int ControlBlockIndexCount = 2;
         private const int ControlBlockIndexSegmentID = 1;
 
+        /// <summary>
+        /// The maximum number of segments that can be created for a queue.
+        /// </summary>
         private const int _MaximumSegmentCount = 1048576;
 
 
         [NonSerialized]
         private object _syncRoot;
 
-        private QueueFullBehaviorEnum _fullBehavior;
-
-        public IPPQueue(string name, string path, QueueFullBehaviorEnum fullBehavior, ISerializer<T> serializer, int segmentSize)
+        /// <summary>
+        /// IPPQueue constructor
+        /// </summary>
+        /// <param name="name">The name of the queue, required to access queue across process boundaries.</param>
+        /// <param name="path">The location / path where the queue will be persited to.</param>
+        /// <param name="serializer">User defined object serializer that implements the ISerializer<T> interface.</param>
+        /// <param name="segmentSize">The number of entries that can be stored in a segment.</param>
+        public IPPQueue(string name, string path, ISerializer<T> serializer, int segmentSize)
         {
             this._path = path;
             this._name = name;
             this._segmentSize = segmentSize;
             this._segementList = new IPPBoundedQueue<int>(name, path, _MaximumSegmentCount, QueueFullBehaviorEnum.ThrowException, new PrimitiveTypeSerializer<int>());
-            this._fullBehavior = fullBehavior;
             this._serializer = serializer;
         }
 
-        public IPPQueue(string name, string path, QueueFullBehaviorEnum fullBehavior, ISerializer<T> serializer)
-            :this(name, path, fullBehavior, serializer, 16384)
+        /// <summary>
+        /// IPPQueue constructor
+        /// </summary>
+        /// <param name="name">The name of the queue, required to access queue across process boundaries.</param>
+        /// <param name="path">The location / path where the queue will be persited to.</param>
+        /// <param name="serializer">User defined object serializer that implements the ISerializer<T> interface.</param>
+        public IPPQueue(string name, string path, ISerializer<T> serializer)
+            :this(name, path, serializer, 16384)
         { }
 
-        public IPPQueue(string name, string path, QueueFullBehaviorEnum fullBehavior)
-            : this(name, path, fullBehavior, new GenericSerializer<T>(), 16384)
+        /// <summary>
+        /// IPPQueue constructor
+        /// </summary>
+        /// <param name="name">The name of the queue, required to access queue across process boundaries.</param>
+        /// <param name="path">The location / path where the queue will be persited to.</param>
+        public IPPQueue(string name, string path)
+            : this(name, path, new GenericSerializer<T>(), 16384)
         { }
 
         #region Properties
 
+        /// <summary>
+        /// Get / set the queue element count.
+        /// </summary>
         private long QueueItemCount
         {
             get => this._segementList.GetCustomControlBlockEntry(ControlBlockIndexCount);
             set => _segementList.SetCustomControlBlockEntry(ControlBlockIndexCount, value);
         }
 
+        /// <summary>
+        /// Get the queue version number. Each time an entry is enqueued or dequeued the version number will increase.
+        /// </summary>
+        /// <remarks>
+        /// Each time a change is made to the queue the version number associated with the queue will increase. 
+        /// This version number is used to help detect changes to the queue.
+        /// </remarks>
         public long Version
         {
             get => this._segementList.GetCustomControlBlockEntry(ControlBlockIndexVersion);
         }
 
+        /// <summary>
+        /// Get the element count in the queue.
+        /// </summary>
         public int Count
         {
             get => (int)this._segementList.GetCustomControlBlockEntry(ControlBlockIndexCount);
         }
 
-        public QueueFullBehaviorEnum FullBehavior
-        {
-            get
-            {
-                return this._fullBehavior;
-            }
-            set
-            {
-                this._fullBehavior = value;
-            }
-        }
 
+        /// <summary>
+        /// Property returns whether the queue is a synchronized collection.
+        /// </summary>
+        /// <remarks>
+        /// The IsSynchronized property will always return false. Even though the Enqueue and Dequeue methods are 
+        /// thread safe, the rest of the queue’s properties and methods are not.
+        /// </remarks>
         bool ICollection.IsSynchronized
         {
             get
@@ -149,7 +186,12 @@ namespace InContex.Collections.Persisted
             this._segementList._array.ReleaseSpinLock();
         }
 
-        public void Clear()
+
+        /// <summary>
+        /// Empty out the queue.
+        /// </summary>
+        /// <param name="zeroBuffer">Parameter indicates whether or not internal circular buffer will be zeroed or not.</param>
+        public void Clear(bool zeroBuffer = true)
         {
             AcquireSpinLock();
 
@@ -163,11 +205,11 @@ namespace InContex.Collections.Persisted
 
                     using (IPPBoundedQueue<T> segment = new IPPBoundedQueue<T>(segmentName, _path, _segmentSize, QueueFullBehaviorEnum.ThrowException, _serializer))
                     {
-                        segment.Clear(false);
+                        segment.Clear(zeroBuffer);
                     }
                 }
 
-                _segementList.Clear(false);
+                _segementList.Clear(zeroBuffer);
             }
             finally
             {
@@ -176,6 +218,11 @@ namespace InContex.Collections.Persisted
 
         }
 
+        /// <summary>
+        /// Determines whether the queue contains a specified element by using the default equality comparer.
+        /// </summary>
+        /// <param name="item">The value to locate in the queue.</param>
+        /// <returns>true if the queue contains the element that has the specified value; otherwise, false</returns>
         public bool Contains(T item)
         {
             AcquireSpinLock();
@@ -225,6 +272,12 @@ namespace InContex.Collections.Persisted
             return item;
         }
 
+        /// <summary>
+        /// Get element at specific index. The index is relative to the position of the queue’s 
+        /// head element, where an index of 0 will return the head element.
+        /// </summary>
+        /// <param name="i"></param>
+        /// <returns>The element located at index</returns>
         public T GetElement(int i)
         {
             T item;
@@ -435,6 +488,10 @@ namespace InContex.Collections.Persisted
             return headSegment;
         }
 
+        /// <summary>
+        /// Adds an object to the end of the queue without any synchronization locks.
+        /// </summary>
+        /// <param name="item">The element to enqueue.</param>
         internal void EnqueueNoLock(T item)
         {
             IPPBoundedQueue<T> tailTailSegment = GetTailSegmentNoLock();
@@ -443,6 +500,10 @@ namespace InContex.Collections.Persisted
             VersionIncrement();
         }
 
+        /// <summary>
+        /// Adds an object to the end of the queue.
+        /// </summary>
+        /// <param name="item">The element to enqueue.</param>
         public void Enqueue(T item)
         {
             AcquireSpinLock();
@@ -457,6 +518,10 @@ namespace InContex.Collections.Persisted
             }
         }
 
+        /// <summary>
+        /// Removes and returns the object at the beginning of the queue without any synchronization locks.
+        /// </summary>
+        /// <returns>The object that is removed from the beginning of the queue.</returns>
         internal object DequeueNoLock()
         {
             IPPBoundedQueue<T> headSegment = GetHeadSegmentNoLock();
@@ -477,10 +542,12 @@ namespace InContex.Collections.Persisted
             {
                 return null;
             }
-
-            
         }
 
+        /// <summary>
+        /// Removes and returns the object at the beginning of the queue.
+        /// </summary>
+        /// <returns>The object that is removed from the beginning of the queue.</returns>
         public T Dequeue()
         {
             T item;
@@ -507,6 +574,11 @@ namespace InContex.Collections.Persisted
             return item;
         }
 
+        /// <summary>
+        /// Method tries to remove and return the element at the beginning of the queue via reference parameter.
+        /// </summary>
+        /// <param name="item">The queue item to return.</param>
+        /// <returns>'true' if element was successfully removed, 'false' if queue was empty.</returns>
         public bool TryDequeue(ref object item)
         {
             bool success = false;
@@ -529,6 +601,14 @@ namespace InContex.Collections.Persisted
             return success;
         }
 
+        /// <summary>
+        /// Remove all items from queue and return removed items as array.
+        /// </summary>
+        /// <returns>Array containing dequeued elements.</returns>
+        /// <remarks>
+        /// It is not recommended to use this method without verifying the size of the queue first. This is 
+        /// due to the potential for the queue to grow extremely large on disk.
+        /// </remarks>
         public T[] DequeueAll()
         {
             int count = this.Count;
@@ -541,7 +621,6 @@ namespace InContex.Collections.Persisted
 
             try
             {
-
                 foreach (int segmentID in _segementList)
                 {
                     string segmentName = GenerateSegmentName(segmentID);
@@ -569,13 +648,15 @@ namespace InContex.Collections.Persisted
             return finalArray;
         }
 
+        /// <summary>
+        /// Returns the element at the beginning of the queue without removing it. 
+        /// </summary>
+        /// <returns>The element at the beginning of the queue.</returns>
         public T Peek()
         {
             AcquireSpinLock();
 
             T item;
-            //long head = this.QueueHead;
-            //long count = this.QueueCount;
 
             try
             {
@@ -597,6 +678,10 @@ namespace InContex.Collections.Persisted
             return item;
         }
 
+        /// <summary>
+        /// Returns the element at the end of the queue without removing it. 
+        /// </summary>
+        /// <returns>The element at the end of the queue.</returns>
         public T PeekTail()
         {
             AcquireSpinLock();
@@ -623,33 +708,30 @@ namespace InContex.Collections.Persisted
             return item;
         }
 
-
-        public Enumerator GetEnumerator()
-        {
-            return new Enumerator((IPPQueue<T>)this);
-        }
-
-        IEnumerator<T> IEnumerable<T>.GetEnumerator()
-        {
-            return new Enumerator((IPPQueue<T>)this);
-        }
-
-        IEnumerator IEnumerable.GetEnumerator()
-        {
-            return new Enumerator((IPPQueue<T>)this);
-        }
-
+        /// <summary>
+        /// Copies the queue elements to an existing one-dimensional Array, starting at the specified array index.
+        /// </summary>
+        /// <param name="array">The zero-based one-dimensional Array that is the destination of the elements copied from the queue.</param>
+        /// <param name="arrayIndex">The zero-based index in array at which copying begins.</param>
         public void CopyTo(T[] array, int arrayIndex)
         {
             this.ToArray().CopyTo(array, arrayIndex);
         }
 
-
+        /// <summary>
+        /// Copies the queue elements to an existing one-dimensional Array, starting at the specified array index.
+        /// </summary>
+        /// <param name="array">The zero-based one-dimensional Array that is the destination of the elements copied from the queue.</param>
+        /// <param name="arrayIndex">The zero-based index in array at which copying begins.</param>
         void ICollection.CopyTo(Array array, int index)
         {
             this.ToArray().CopyTo(array, index);
         }
 
+        /// <summary>
+        /// Return queue elements as an array without any synchronization locks.
+        /// </summary>
+        /// <returns>Array containing queue elements.</returns>
         private T[] ToArrayNoLock()
         {
             int count = this.Count;
@@ -658,7 +740,7 @@ namespace InContex.Collections.Persisted
 
             T[] finalArray = new T[count];
 
-            foreach(int segmentID in _segementList)
+            foreach (int segmentID in _segementList)
             {
                 string segmentName = GenerateSegmentName(segmentID);
 
@@ -676,6 +758,10 @@ namespace InContex.Collections.Persisted
             return finalArray;
         }
 
+        /// <summary>
+        /// Return queue elements as an array.
+        /// </summary>
+        /// <returns>Array containing queue elements.</returns>
         public T[] ToArray()
         {
             T[] items;
@@ -693,18 +779,48 @@ namespace InContex.Collections.Persisted
             return items;
         }
 
-        // NOTE: Removed once memory is allocated in MMF view changing the size won’t actually release the memory.
+        /// <summary>
+        /// Returns an enumerator that iterates through the IPPBoundedQueue.
+        /// </summary>
+        /// <returns>A IPPQueue<T>.Enumerator structure for the IPPBoundedQueue.</returns>
+        public Enumerator GetEnumerator()
+        {
+            return new Enumerator((IPPQueue<T>)this);
+        }
+
+        /// <summary>
+        /// Returns an enumerator that iterates through the IPPQueue.
+        /// </summary>
+        /// <returns>A IPPQueue<T>.Enumerator structure for the IPPQueue.</returns>
+        IEnumerator<T> IEnumerable<T>.GetEnumerator()
+        {
+            return new Enumerator((IPPQueue<T>)this);
+        }
+
+        /// <summary>
+        /// Returns an enumerator that iterates through the IPPQueue.
+        /// </summary>
+        /// <returns>A IPPQueue<T>.Enumerator structure for the IPPQueue.</returns>
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return new Enumerator((IPPQueue<T>)this);
+        }
+
+
 
 
         #region Dispose
 
+        /// <summary>
+        /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
+        /// </summary>
         public void Dispose()
         {
             Dispose(true);
             GC.SuppressFinalize(this);
         }
 
-        protected virtual void Dispose(bool disposing)
+        private void Dispose(bool disposing)
         {
             if (disposing)
             {
@@ -738,8 +854,11 @@ namespace InContex.Collections.Persisted
 
         #endregion
 
+        #region Enumerator Implementation
 
-        // Nested Types
+        /// <summary>
+        /// Supports a simple iteration over a queue.
+        /// </summary>
         public struct Enumerator : IEnumerator<T>, IDisposable, IEnumerator
         {
             private IPPQueue<T> _q;
@@ -754,12 +873,19 @@ namespace InContex.Collections.Persisted
                 this._currentElement = default(T);
             }
 
+            /// <summary>
+            /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
+            /// </summary>
             public void Dispose()
             {
                 this._index = -2;
                 this._currentElement = default(T);
             }
 
+            /// <summary>
+            /// Advances the enumerator to the next element of the queue.
+            /// </summary>
+            /// <returns>true if the enumerator was successfully advanced to the next element; false if the enumerator has passed the end of the queue.</returns>
             public bool MoveNext()
             {
                 if (this._version != this._q.Version)
@@ -782,6 +908,9 @@ namespace InContex.Collections.Persisted
                 return true;
             }
 
+            /// <summary>
+            /// Gets the element in the queue at the current position of the enumerator.
+            /// </summary>
             public T Current
             {
                 get
@@ -803,9 +932,11 @@ namespace InContex.Collections.Persisted
                 }
             }
 
+            /// <summary>
+            /// Gets the element in the queue at the current position of the enumerator.
+            /// </summary>
             object IEnumerator.Current
             {
-
                 get
                 {
                     if (this._index < 0)
@@ -824,6 +955,10 @@ namespace InContex.Collections.Persisted
                     return this._currentElement;
                 }
             }
+
+            /// <summary>
+            /// Sets the enumerator to its initial position, which is before the first element in the queue.
+            /// </summary>
             void IEnumerator.Reset()
             {
                 if (this._version != this._q.Version)
@@ -835,5 +970,7 @@ namespace InContex.Collections.Persisted
                 this._currentElement = default(T);
             }
         }
+
+        #endregion
     }
 }

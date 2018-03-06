@@ -29,7 +29,7 @@ namespace InContex.Collections.Persisted.Core
     /// accessed across process boundaries.
     /// </summary>
     /// <typeparam name="T">The type of element stored in the array.</typeparam>
-    public class IPPArray<T> : IEnumerable<T>, IEnumerable, ICollection, IDisposable where T : struct
+    public sealed class IPPArray<T> : IEnumerable<T>, IEnumerable, ICollection, IDisposable where T : struct
     {
         #region Field Members
         /// <summary>
@@ -144,8 +144,10 @@ namespace InContex.Collections.Persisted.Core
             string filename = name.Trim() + ".mma";
             string fileFullName = Path.Combine(path.Trim(), filename);
 
-            IPPArrayHeader header = new IPPArrayHeader();
-            header.InitializationCount = 0;
+            IPPArrayHeader header = new IPPArrayHeader
+            {
+                InitializationCount = 0
+            };
 
             if (exists)
             {
@@ -268,7 +270,7 @@ namespace InContex.Collections.Persisted.Core
 
                 if (_itemSize != persistedItemSize)
                 {
-                    Close();
+                    CloseMemoryMap();
                     string message = "Expected memory map message size does not match persisted message size.";
                     __logger.Error(message);
                     throw new ArrayTypeMismatchException(message);
@@ -276,7 +278,7 @@ namespace InContex.Collections.Persisted.Core
 
                 if (length != persistedLength)
                 {
-                    Close();
+                    CloseMemoryMap();
                     string message = "Persisted array length mismatches expected array length.";
                     __logger.Error(message);
                     throw new ApplicationException(message);
@@ -330,14 +332,14 @@ namespace InContex.Collections.Persisted.Core
 
                     if (_itemSize != persistedItemSize)
                     {
-                        Close();
+                        CloseMemoryMap();
                         string message = "Expected memory map message size does not match persisted message size.";
                         throw new ArrayTypeMismatchException(message);
                     }
 
                     if (expectedLength != persistedLength)
                     {
-                        Close();
+                        CloseMemoryMap();
                         string message = "Persisted array length mismatches expected array length.";
                         throw new ApplicationException(message);
                     }
@@ -526,7 +528,7 @@ namespace InContex.Collections.Persisted.Core
         }
 
         /// <summary>
-        /// Get the array version number. Each time an entry is enqueued or dequeued the version number will increase.
+        /// Get the array version number. Each time an array entry is modified the version number will increase.
         /// </summary>
         /// <remarks>
         /// Each time a write action is made to the array the version number associated with the array will increase. 
@@ -600,7 +602,7 @@ namespace InContex.Collections.Persisted.Core
             _view = null;
         }
 
-        private void Close()
+        private void CloseMemoryMap()
         {
             string mutexName = string.Format(InitializationLockMutexName, _name);
             int timeoutMS = 10000;
@@ -643,7 +645,7 @@ namespace InContex.Collections.Persisted.Core
             int byteLength = (int)length * (int)_itemSize;
 
             byte* bufferPtr = viewPtr + _headerSize;
-            NativeMem.MemSet((IntPtr)(bufferPtr + byteOffset), 0, byteLength);
+            NativeMethods.MemSet((IntPtr)(bufferPtr + byteOffset), 0, byteLength);
 
             VersionIncrement();
         }
@@ -1054,19 +1056,19 @@ namespace InContex.Collections.Persisted.Core
             GC.SuppressFinalize(this);
         }
 
-        protected virtual void Dispose(bool disposing)
+        private void Dispose(bool disposing)
         {
             if (disposing)
             {
                 // free managed resources  
-                Close();
+                CloseMemoryMap();
                 _disposed = true;
              }
             else
             {
                 if(!_disposed)
                 {
-                    Close();
+                    CloseMemoryMap();
                     _disposed = true;
                 }
             }

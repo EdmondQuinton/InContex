@@ -9,16 +9,16 @@ using InContex.Runtime.Serialization;
 namespace InContex.Collections.Persisted
 {
     /// <summary>
-    /// Represents a fixed length first-in, first-out collection of objects.
+    /// Bounded inter process persisted queue. Represents a fixed length first-in, first-out collection of objects.
     /// </summary>
     /// <remarks>
-    /// This class implements a generic fixed length inter process persited queue (IPPBoundedQueue) 
-    /// as a circular array. The queue utilizes the IPPArray as the circular array,  this ensures 
-    /// that the queue is persited and accessible across process boundaries on the same machine.
+    /// This class implements an array of segments that consisting of IPPBoundedQueue objects. Only the segments 
+    /// containing the head and tail of the queue is kept in memory. The remaining segments is only loaded as needed. 
+    /// This configuration means that the queue can grow indefinitely (as long as there is enough diskspace) while 
+    /// keeping memory requirement relatively low and maintain a reasonable performance level. 
     /// </remarks>
-    /// <typeparam name="T"></typeparam>
-    [Serializable]
-    public class IPPBoundedQueue<T> : IEnumerable<T>, IEnumerable, ICollection, IReadOnlyCollection<T>, IDisposable where T: struct
+    /// <typeparam name="T">Specifies the type of elements in the queue.</typeparam>
+    public sealed class IPPBoundedQueue<T> : IEnumerable<T>, IEnumerable, ICollection, IReadOnlyCollection<T>, IDisposable where T: struct
     {
         #region Field Members
         /// <summary>
@@ -182,7 +182,7 @@ namespace InContex.Collections.Persisted
         /// </summary>
         /// <remarks>
         /// The IsSynchronized property will always return false. Even though the Enqueue and Dequeue methods are 
-        /// thread safe, the rest queue’s properties and methods are not.
+        /// thread safe, the rest of the queue’s properties and methods are not.
         /// </remarks>
         bool ICollection.IsSynchronized
         {
@@ -321,7 +321,7 @@ namespace InContex.Collections.Persisted
         /// <summary>
         /// Adds an object to the end of the queue without any synchronization locks.
         /// </summary>
-        /// <param name="item"></param>
+        /// <param name="item">The element to enqueue.</param>
         internal void EnqueueNoLock(T item)
         {
             long capacity = _array.Length;
@@ -354,7 +354,7 @@ namespace InContex.Collections.Persisted
         /// Adds an object to the end of the queue.
         /// </summary>
         /// <param name="item">The object to add to the queue<T></param>
-        public virtual void Enqueue(T item)
+        public void Enqueue(T item)
         {
             _array.AcquireSpinLock();
 
@@ -631,16 +631,19 @@ namespace InContex.Collections.Persisted
         }
 
         #endregion
-        
+
         #region Dispose
 
+        /// <summary>
+        /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
+        /// </summary>
         public void Dispose()
         {
             Dispose(true);
             GC.SuppressFinalize(this);
         }
 
-        protected virtual void Dispose(bool disposing)
+        private void Dispose(bool disposing)
         {
             if (disposing)
             {
@@ -654,6 +657,9 @@ namespace InContex.Collections.Persisted
             // free native resources if there are any. 
         }
 
+        /// <summary>
+        /// Instance Finalizer
+        /// </summary>
         ~IPPBoundedQueue()
         {
             // Finalizer calls Dispose(false)  
