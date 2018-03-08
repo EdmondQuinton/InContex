@@ -8,6 +8,14 @@ using System.Diagnostics;
 
 namespace IPPArrayTest
 {
+    struct ExampleVariableStruct
+    {
+        public int ID;
+        public double Value;
+        public int Quality;
+        public DateTime Timestamp;
+    }
+
     class IPPArrayTestCases
     {
         public static void OpenCoseTest()
@@ -189,6 +197,50 @@ namespace IPPArrayTest
             Console.WriteLine();
             Console.WriteLine("Press any key to continue");
             Console.ReadKey();
+        }
+
+        public static void LargeInstanceCountTest()
+        {
+            int instanceCount = 1000000;
+            int size = 32000;
+            string path = @"C:\temp\IPPArray\{0}";
+            int lastItemId = 0;
+            IPPArray<ExampleVariableStruct>[] arrays = new IPPArray<ExampleVariableStruct>[instanceCount];
+
+            Console.WriteLine();
+            Console.WriteLine("Creating a {0} instance of size {1}.", instanceCount, size);
+            Console.ReadKey();
+
+            try
+            {
+
+                for (int itemID = 0; itemID < instanceCount; itemID++)
+                {
+                    string arrayName = string.Format("VariableStreamArray{0}", itemID);
+                    int block = itemID / 1000;
+                    string fullPath = string.Format(path, block);
+
+                    arrays[itemID] = IPPArray<ExampleVariableStruct>.Open(fullPath, arrayName, size);
+
+                    for (int index = 0; index < size; index++)
+                    {
+                        ExampleVariableStruct value = new ExampleVariableStruct
+                        {
+                            ID = index,
+                            Quality = 192,
+                            Timestamp = DateTime.Now,
+                            Value = index
+                        };
+
+                        arrays[itemID][index] = value;
+                        lastItemId = itemID;
+                    }
+                }
+            }
+            finally
+            {
+                Console.WriteLine("Last ItemID {0}.", lastItemId);
+            }
         }
     }
 }

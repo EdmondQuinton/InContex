@@ -26,6 +26,10 @@ namespace IPPArrayTest
             HelpText = "Test thread id.")]
         public bool ExecuteThreadTest { get; set; }
 
+        [Option('l', "LargeInstance", Default = false,
+            HelpText = "Large instance count test.")]
+        public bool LargeInstanceCountTest { get; set; }
+
     }
 
     class Program
@@ -41,6 +45,7 @@ namespace IPPArrayTest
                     if (options.ExecuteOpenTest) IPPArrayTestCases.OpenCoseTest();
                     if (options.ExecuteReadWriteTest) IPPArrayTestCases.ReadWriteTest();
                     if (options.ExecuteThreadTest) IPPArrayTestCases.ThreadTest();
+                    if (options.LargeInstanceCountTest) IPPArrayTestCases.LargeInstanceCountTest();
                 }
             );
         }
