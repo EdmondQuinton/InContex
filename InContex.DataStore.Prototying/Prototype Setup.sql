@@ -1,0 +1,12 @@
+﻿USE [$(DatabaseName)];
+
+GO
+
+IF NOT EXISTS (SELECT * FROM sys.filegroups WHERE name='MOFG_01') 
+BEGIN
+	ALTER DATABASE [$(DatabaseName)] ADD FILEGROUP MOFG_01 CONTAINS MEMORY_OPTIMIZED_DATA;
+	ALTER DATABASE [$(DatabaseName)] ADD FILE (NAME='MOF_01', FILENAME='$(DefaultDataPath)$(DefaultFilePrefix)_MOF_01') TO FILEGROUP MOFG_01;
+END
+
+
+

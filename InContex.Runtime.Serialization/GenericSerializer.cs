@@ -7,6 +7,15 @@ using System.Reflection.Emit;
 
 namespace InContex.Runtime.Serialization
 {
+    /// <summary>
+    /// Generic serializer, serializes and deserializes fixed length struct objects into and from byte arrays.
+    /// </summary>
+    /// <typeparam name="T">Object type to serialize.</typeparam>
+    /// <remarks>
+    /// The class uses IL emitted functions to quickly convert generic structs to and from pointers. This method
+    /// method was developed by Justin Stenning as part of his FastStructure class as part of his SharedMemory project. 
+    /// Please see http://spazzarama.com for more detail.
+    /// </remarks>
     public class GenericSerializer<T> : ISerializer<T> where T : struct
     {
         private int _structSize;
@@ -17,6 +26,9 @@ namespace InContex.Runtime.Serialization
         private readonly StructToPtrDelegate GetStructPtr;
         private readonly PtrToStructDelegate PtrToStruct;
 
+        /// <summary>
+        /// Constructor
+        /// </summary>
         public GenericSerializer()
         {
             this._structSize = Marshal.SizeOf(typeof(T));
@@ -25,12 +37,17 @@ namespace InContex.Runtime.Serialization
         }
 
 
-        public byte[] Serialize(T value)
+        /// <summary>
+        /// Serializes the specified stuct to a byte array.
+        /// </summary>
+        /// <param name="item">The stuct item to serialize</param>
+        /// <returns>Byte array of containing serialized item.</returns>
+        public byte[] Serialize(T item)
         {
             byte[] buffer = new byte[this._structSize];
 
             IntPtr ptr = Marshal.AllocHGlobal(this._structSize);
-            GetStructPtr(ref value, (IntPtr)ptr);
+            GetStructPtr(ref item, (IntPtr)ptr);
             Marshal.Copy(ptr, buffer, 0, this._structSize);
             Marshal.FreeHGlobal(ptr);
 
@@ -38,16 +55,10 @@ namespace InContex.Runtime.Serialization
         }
 
         /// <summary>
-        ///  Copy content of struct to buffer referenced by pointer.
+        /// Deserializes the stuct item contained by the specified byte array.
         /// </summary>
-        /// <param name="value"></param>
-        /// <param name="bufferPtr"></param>
-        public void Serialize(T value, IntPtr bufferPtr)
-        {
-            GetStructPtr(ref value, bufferPtr);
-        }
-
-
+        /// <param name="buffer"></param>
+        /// <returns></returns>
         public T DeSerialize(byte[] buffer) 
         {
             unsafe
@@ -59,11 +70,10 @@ namespace InContex.Runtime.Serialization
             }
         }
 
-        public T DeSerialize(IntPtr bufferPtr)
-        {
-            return PtrToStruct(bufferPtr);
-        }
-
+        /// <summary>
+        /// Return the expected byte size of any item serialized by this class.
+        /// </summary>
+        /// <returns></returns>
         public int SerializedByteSize() 
         {
             return this._structSize;
