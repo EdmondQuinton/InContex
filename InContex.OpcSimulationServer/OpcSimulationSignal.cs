@@ -64,11 +64,17 @@ namespace InContex.OpcSimulationServer
             }
 
             float value = _signal.GetValue();
-            
-            _variable.Value = value;
-            _variable.Timestamp = DateTime.UtcNow;
-            _variable.StatusCode = StatusCodes.Good;
-            _variable.ClearChangeMasks(context, false);
+
+            float lastValue = Convert.ToSingle(_variable.Value);
+
+            if (Math.Abs(value - lastValue) > 1)
+            {
+
+                _variable.Value = value;
+                _variable.Timestamp = DateTime.UtcNow;
+                _variable.StatusCode = StatusCodes.Good;
+                _variable.ClearChangeMasks(context, false);
+            }
         }
 
         private static FolderState CreateFolder(NodeState parent, string path, string name, ushort namespaceIndex)
@@ -202,7 +208,7 @@ namespace InContex.OpcSimulationServer
 
 
 
-        public static OpcSimulationSignal CreateSimulationSignal(FolderState root, string variableFullPathName, BuiltInType datatype, SignalType signalType, float amplitude, float offset, float frequencyMin, float frequencyMax, ushort folderNamespaceIndex, ushort variableNameSpace, string identifierType, string identifier)
+        public static OpcSimulationSignal CreateSimulationSignal(FolderState root, string variableFullPathName, BuiltInType datatype, SignalType signalType, float amplitude, float offset, float frequencyMin, float frequencyMax, ushort folderNamespaceIndex, ushort variableNameSpace, string identifierType, string identifier, int handle)
         {
             string parentPath = GetParentFolderString(variableFullPathName);
             string variableName = GetLeafFolderString(variableFullPathName);
@@ -224,6 +230,7 @@ namespace InContex.OpcSimulationServer
             {
                 variable.NodeId = new NodeId(Encoding.ASCII.GetBytes(identifier), variableNameSpace);
             }
+            variable.Handle = handle;
 
             OpcSimulationSignal signalSimulation = new OpcSimulationSignal(variableFullPathName, datatype, signalType, amplitude, offset, frequencyMin, frequencyMax, variable);
 

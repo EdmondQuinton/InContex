@@ -10,6 +10,12 @@ using OfficeOpenXml.Table;
 
 namespace InContex.RealtimeComms.Prototyping01
 {
+    public class NodeDetails
+    {
+        public string nodeID;
+        public int handle;
+    }
+
     class Program
     {
         private static SessionManager _opcSessionManager;
@@ -17,25 +23,25 @@ namespace InContex.RealtimeComms.Prototyping01
 
         static void Main(string[] args)
         {
-            List<string> nodeIds = LoadNodeIds();
+            List<NodeDetails> nodeIds = LoadNodeIds();
             Uri uri = new Uri(_opcServerUriString);
             _opcSessionManager = new SessionManager(uri, null, null);
             
-            foreach(string nodeID in nodeIds)
+            foreach(NodeDetails node in nodeIds)
             {
-                _opcSessionManager.CreateMonitoredItem(nodeID, 1000);
+                _opcSessionManager.CreateMonitoredItem(node.nodeID, 1000, node.handle);
             }
 
             Console.WriteLine("OPC client is running. Press enter to quit.");
             Console.ReadLine();
         }
 
-        private static List<string> LoadNodeIds()
+        private static List<NodeDetails> LoadNodeIds()
         {
             string path = AppDomain.CurrentDomain.BaseDirectory;
             string file = "AddressSpace.xlsx";
             string fileFullName = Path.Combine(path, file);
-            List<string> nodeIdList;
+            List<NodeDetails> nodeIdList;
 
             var fileInfo = new FileInfo(fileFullName);
 
@@ -53,9 +59,9 @@ namespace InContex.RealtimeComms.Prototyping01
             return nodeIdList;
         }
 
-        private static List<string> LoadNodeIdsFromExcelTable(ExcelTable table)
+        private static List<NodeDetails> LoadNodeIdsFromExcelTable(ExcelTable table)
         {
-            List<string> nodeIdList = new List<string>();
+            List<NodeDetails> nodeIdList = new List<NodeDetails>();
 
             //Get the cells based on the table address
             var groups = table.WorkSheet.Cells[table.Address.Start.Row, table.Address.Start.Column, table.Address.End.Row, table.Address.End.Column]
@@ -84,6 +90,7 @@ namespace InContex.RealtimeComms.Prototyping01
             string identifierType = "s";
             string identifier = "";
             string nodeID = "";
+            int handle = 0;
             //ns=2;s=MyTemperature
 
             foreach (var row in rowvalues)
@@ -101,11 +108,20 @@ namespace InContex.RealtimeComms.Prototyping01
                         case "identifier":
                             identifier = Convert.ToString(row[column.index]);
                             break;
-                   }
+                        case "id":
+                            handle = Convert.ToInt32(row[column.index]);
+                            break;
+                    }
                 }
 
                 nodeID = string.Format("ns={0};{1}={2}", variableNamespaceIndex, identifierType, identifier);
-                nodeIdList.Add(nodeID);
+                NodeDetails node = new NodeDetails()
+                {
+                    nodeID = nodeID,
+                    handle = handle
+                };
+
+                nodeIdList.Add(node);
             }
 
             return nodeIdList;

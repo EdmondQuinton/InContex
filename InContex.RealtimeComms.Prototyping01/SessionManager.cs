@@ -17,6 +17,7 @@ namespace InContex.RealtimeComms.Prototyping01
     public class SessionManager
     {
         private static Logger __logger = LogManager.GetCurrentClassLogger();
+        private static int _handleCount = 0;
 
         private ApplicationConfiguration _configuration = null;
         private string _applicationName = "InContex.Comms.Prototyping";
@@ -24,7 +25,7 @@ namespace InContex.RealtimeComms.Prototyping01
         private Session _session;
         private Dictionary<string, Subscription> _subscriptions;
         private bool _disposed = false;
-        //private IPPQueue<>
+        private SignalStore _signalStore;
 
         public SessionManager()
             : this(null, null, null) { }
@@ -38,11 +39,13 @@ namespace InContex.RealtimeComms.Prototyping01
             _configuration = moduleConfiguration.Configuration;
             _configuration.CertificateValidator.CertificateValidation += new CertificateValidationEventHandler(CertificateValidation);
             _subscriptions = new Dictionary<string, Subscription>();
+            _signalStore = new SignalStore();
 
             if (endpointUrl != null)
             {
                 EndpointConnect(endpointUrl, userName, password).Wait();
             }
+
         }
 
         private void CertificateValidation(CertificateValidator validator, CertificateValidationEventArgs e)
@@ -107,15 +110,15 @@ namespace InContex.RealtimeComms.Prototyping01
         }
 
 
-        public void CreateMonitoredItem(string nodeID, int publishingInterval)
+        public void CreateMonitoredItem(string nodeID, int publishingInterval, int handle)
         {
-            CreateMonitoredItem("Default", nodeID, publishingInterval, 1);
+            CreateMonitoredItem("Default", nodeID, publishingInterval, 1, handle);
         }
 
         /// <summary>
         /// Creates a subscription to a monitored item on an OPC UA server
         /// </summary>
-        public void CreateMonitoredItem(string group, string nodeID, int publishingInterval, uint queueSize = 1)
+        public void CreateMonitoredItem(string group, string nodeID, int publishingInterval, uint queueSize, int handle)
         {
 
             if (_session != null)
@@ -153,6 +156,8 @@ namespace InContex.RealtimeComms.Prototyping01
                 // add the new monitored item.
                 MonitoredItem monitoredItem = new MonitoredItem(subscription.DefaultItem);
 
+                _handleCount++;
+                monitoredItem.Handle = handle;
                 monitoredItem.StartNodeId = nodeLookup;
                 monitoredItem.AttributeId = Attributes.Value;
                 monitoredItem.DisplayName = nodeDisplayName;
@@ -189,7 +194,7 @@ namespace InContex.RealtimeComms.Prototyping01
             }
         }
 
-        public static void OnMonitoredItemNotification(MonitoredItem monitoredItem, MonitoredItemNotificationEventArgs e)
+        public void OnMonitoredItemNotification(MonitoredItem monitoredItem, MonitoredItemNotificationEventArgs e)
         {
             try
             {
@@ -207,7 +212,21 @@ namespace InContex.RealtimeComms.Prototyping01
   
                 foreach (var value in monitoredItem.DequeueValues())
                 {
-                    Console.WriteLine("{0} - {4}: {1}, {2}, {3}", monitoredItem.DisplayName, value.Value, value.SourceTimestamp, value.StatusCode, monitoredItem.StartNodeId.ToString());
+                    int h = (int)monitoredItem.Handle;
+
+                    AnalogueSignal signalValue = new AnalogueSignal()
+                    {
+                        SampleDateTimeUTC = value.SourceTimestamp.Ticks,
+                        Value = Convert.ToDouble(value.Value),
+                        StatusCode = (int)(uint)value.StatusCode,
+                        StatusGood = StatusCode.IsGood(value.StatusCode) == true ? 1 : 0,
+                        SignalID = (int)monitoredItem.Handle,
+                        PreviousSampleDateTimeUTC = value.SourceTimestamp.Ticks,
+                        DeltaValue = 0
+                    };
+
+                    _signalStore.WriteAnalogue(signalValue);
+                    __logger.Trace("{0} - {4}: {1}, {2}, {3}", monitoredItem.DisplayName, value.Value, value.SourceTimestamp, value.StatusCode, h);
                 }
 
             }

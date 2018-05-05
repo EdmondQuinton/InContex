@@ -16,6 +16,7 @@ namespace InContex.Collections.Persisted
     /// <typeparam name="T">Specifies the type of elements in the queue.</typeparam>
     public sealed class IPPQueue<T> : IEnumerable<T>, IEnumerable, ICollection, IReadOnlyCollection<T>, IDisposable where T : struct
     {
+        private static T[] _emptyBuffer = new T[0];
         /// <summary>
         /// 
         /// </summary>
@@ -646,6 +647,37 @@ namespace InContex.Collections.Persisted
             }
 
             return finalArray;
+        }
+
+        public T[] DequeueSegment()
+        {
+            AcquireSpinLock();
+
+            try
+            {
+                IPPBoundedQueue<T> headSegment = GetHeadSegmentNoLock();
+
+                if (headSegment == null)
+                {
+                    return _emptyBuffer;
+                }
+
+                int count = headSegment.Count;
+
+                if (count > 0)
+                {
+                    T[] items = headSegment.DequeueAllNoLock();
+                    QueueItemCount -= count;
+                    VersionIncrement();
+                    return items;
+                }
+            }
+            finally
+            {
+                ReleaseSpinLock();
+            }
+
+            return _emptyBuffer;
         }
 
         /// <summary>

@@ -445,6 +445,18 @@ namespace InContex.Collections.Persisted
             return items;
         }
 
+        internal T[] DequeueAllNoLock()
+        {
+            T[] items;
+
+            items = ToArrayNoLock();
+            QueueHead = 0;
+            QueueTail = 0;
+            QueueCount = 0;
+
+            return items;
+        }
+
         /// <summary>
         /// Returns the element at the beginning of the queue without removing it. The method does not apply
         /// any synchronization locks.

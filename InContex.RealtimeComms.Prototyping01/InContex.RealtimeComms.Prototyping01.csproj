@@ -21,6 +21,7 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -30,6 +31,7 @@
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="BouncyCastle.Crypto, Version=1.8.1.0, Culture=neutral, PublicKeyToken=0e99375e54769942, processorArchitecture=MSIL">
@@ -226,10 +228,13 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AnalogueSignal.cs" />
     <Compile Include="Opc\OpcApplicationConfiguration.cs" />
+    <Compile Include="AnalogueSignalSerializer.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="SessionManager.cs" />
+    <Compile Include="SignalDataStore.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="AddressSpace.xlsx">
@@ -238,6 +243,7 @@
     <None Include="App.config" />
     <Content Include="NLog.config">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <SubType>Designer</SubType>
     </Content>
     <None Include="NLog.xsd">
       <SubType>Designer</SubType>
@@ -248,6 +254,10 @@
     <ProjectReference Include="..\InContex.Collections.Persisted\InContex.Collections.Persisted.csproj">
       <Project>{1bf0ef8a-8416-430c-bb04-6e0a11b00382}</Project>
       <Name>InContex.Collections.Persisted</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\InContex.Runtime.Serialization\InContex.Runtime.Serialization.csproj">
+      <Project>{324a5b1b-f5e5-4646-995b-91ab8c0a7ca1}</Project>
+      <Name>InContex.Runtime.Serialization</Name>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

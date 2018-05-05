@@ -55,7 +55,7 @@ namespace InContex.OpcSimulationServer
 
         private List<BaseDataVariableState> _dynamicNodes;
         private Dictionary<string, FolderState> _folders;
-        private Dictionary<string, OpcSimulationSignal> _signals;
+        private List<OpcSimulationSignal> _signals;
         #endregion
 
         #region Constructors
@@ -79,7 +79,7 @@ namespace InContex.OpcSimulationServer
 
             _dynamicNodes = new List<BaseDataVariableState>();
             _folders = new Dictionary<string, FolderState>();
-            _signals = new Dictionary<string, OpcSimulationSignal>();
+            _signals = new List<OpcSimulationSignal>();
         }
         #endregion
 
@@ -217,13 +217,17 @@ namespace InContex.OpcSimulationServer
             float frequencyMax = 0.1f;
             float offset = 0;
             float amplitude = 1;
+            int handle = 0;
 
             foreach (var row in rowvalues)
             {
                 foreach (var column in colnames)
                 {
                     switch (column.Name.ToLower())
-                    {
+                    { 
+                        case "id":
+                            handle = Convert.ToInt32(row[column.index]);
+                            break;
                         case "variable":
                             variableName = Convert.ToString(row[column.index]);
                             break;
@@ -260,8 +264,8 @@ namespace InContex.OpcSimulationServer
                             break;
                     }
                 }
-                var signal = OpcSimulationSignal.CreateSimulationSignal(root, variableName, dataType, signalType, amplitude, offset, frequencyMin, frequencyMax, NamespaceIndex, variableNamespaceIndex, identifierType, identifier);
-                _signals.Add(variableName, signal);
+                var signal = OpcSimulationSignal.CreateSimulationSignal(root, variableName, dataType, signalType, amplitude, offset, frequencyMin, frequencyMax, NamespaceIndex, variableNamespaceIndex, identifierType, identifier, handle);
+                _signals.Add(signal);
             }
         }
 
@@ -448,7 +452,7 @@ namespace InContex.OpcSimulationServer
                 }
 
                 AddPredefinedNode(SystemContext, root);
-                m_simulationTimer = new Timer(DoSimulation, null, 1000, 1000);
+                m_simulationTimer = new Timer(DoSimulation, null, 500, 500);
             }
         }
 
@@ -1659,7 +1663,8 @@ namespace InContex.OpcSimulationServer
             {
                 lock (Lock)
                 {
-                    foreach(OpcSimulationSignal signal in _signals.Values)
+                    _signals.Shuffle();
+                    foreach (OpcSimulationSignal signal in _signals)
                     {
                         signal.NextValue(SystemContext);
                     }
